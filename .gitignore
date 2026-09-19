@@ -1,0 +1,9 @@
+node_modules/
+.lmstudio/
+dist/
+*.log
+__pycache__/
+outputs/
+*.sqlite
+*.sqlite-journal
+*.building*
