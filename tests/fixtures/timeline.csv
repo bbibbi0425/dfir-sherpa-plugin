@@ -1,7 +1,0 @@
-line_id,timestamp,source,event_type,subject,detail,payload,source_file,raw_ref
-sample-a,2025-01-01T00:00:00Z,alpha,observation,quartz,"comma, quote ""and"" text","{""value"": ""001""}",example.csv,ref-a
-sample-b,,beta,note,한글,"first line
-second line",,example.csv,ref-b
-sample-c,  unchanged  ,alpha,,  preserve spaces  ,,null,,
-sample-d,0007,beta,observation,Ω🙂,tab-free text,"{""nested"": [1, 2]}",example.csv,ref-d
-sample-e,,alpha,note,,,,example.csv,ref-e

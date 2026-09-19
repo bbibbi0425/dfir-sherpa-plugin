@@ -65,7 +65,7 @@ DB 경로는 채팅별 설정이며 모델의 Tool 인자로 받지 않습니다
 
 ## 데이터베이스 형식
 
-기존 SQLite DB에 일반 테이블 `timeline`이 있어야 하며, 다음 9개 컬럼은 `TEXT` 형식이어야 합니다.
+데이터베이스는 외부에서 준비한 SQLite 파일을 사용합니다. 일반 테이블 `timeline`이 있어야 하며, 다음 9개 컬럼은 `TEXT` 형식이어야 합니다.
 
 ```text
 line_id, timestamp, source, event_type, subject, detail, payload, source_file, raw_ref
@@ -74,8 +74,6 @@ line_id, timestamp, source, event_type, subject, detail, payload, source_file, r
 `line_id`는 단일 컬럼 기본 키여야 하고 SQLite `rowid`를 사용할 수 있어야 합니다. `timestamp`, `source`, `event_type` 인덱스는 필터 조회에 활용할 수 있습니다.
 
 자유 텍스트 검색은 `subject`, `detail`, `payload`에 대한 리터럴 부분 문자열 검색입니다. FTS는 사용하지 않으며, 검색 성능은 데이터 크기와 조건에 따라 달라집니다. timestamp는 저장된 문자열을 기준으로 비교하고 날짜 형식이나 시간대를 변환하지 않습니다.
-
-별도의 CSV 변환 스크립트도 제공하지만, 이 스크립트는 `records` 기반의 다른 스키마를 생성합니다. **변환 결과는 현재 플러그인의 `timeline` DB로 바로 연결할 수 없습니다.** 자세한 내용은 [CSV 빌드 안내](docs/import.md)를 참고하세요.
 
 ## 읽기 전용 조회와 호출 로그
 
@@ -98,7 +96,7 @@ SHERPA_LOG_DIR=C:\experiment-logs
 
 ```text
 src/        Tool 구현, 플러그인 설정, 호출 로그
-scripts/    CSV 빌드, benchmark, 호출 검증 스크립트
+scripts/    benchmark, 호출 검증 스크립트
 tests/      합성 fixture와 기능 테스트
 docs/       상세 스키마와 실행·검증 안내
 ```
@@ -115,4 +113,3 @@ docs/       상세 스키마와 실행·검증 안내
 - [개별 기록·주변 문맥 조회](docs/record-tools.md)
 - [데이터셋 개요·설치 및 smoke test](docs/overview-smoke.md)
 - [Tool 호출 JSONL 계측](docs/instrumentation.md)
-- [오프라인 CSV → SQLite 빌드](docs/import.md)

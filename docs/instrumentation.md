@@ -43,7 +43,7 @@ subject/detail/payload/snippet과 전체 응답 JSON은 로그에 저장하지 �
 
 기존 파일을 truncate/수정/회전/삭제하지 않는다. 다른 형식의 파일, 끝 LF가 없는 불완전한 파일,
 다른 run의 파일, symlink/hard link 대상은 거부한다. DB와 로그 파일의 파일 식별자도 비교한다.
-로그 디렉터리 외에 원본 CSV나 forensic DB를 쓰는 동작은 없다.
+로그 디렉터리 외에 원본 데이터나 forensic DB를 쓰는 동작은 없다.
 
 오류는 stderr에 `sherpa_log_error` JSON으로, LM Studio에는 해당 Tool의 `warn`으로 알린다.
 실패한 로그를 성공으로 표시하지 않으며 Tool 반환값에 필드를 추가하거나 오류로 바꾸지 않는다.
