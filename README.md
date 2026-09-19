@@ -8,6 +8,7 @@ DB 경로는 플러그인의 채팅별 `Canonical timeline DB` 설정으로 지�
 검색 구현·실행·성능 결과는 [search_records 안내](docs/search.md)를 참고하세요.
 개별 레코드와 주변 문맥 조회는 [get_record / get_context 안내](docs/record-tools.md)를 참고하세요.
 최소 메타정보와 설치 검증은 [dataset_overview / smoke test 안내](docs/overview-smoke.md)를 참고하세요.
+실험별 append-only Tool 호출 기록은 [JSONL 계측 안내](docs/instrumentation.md)를 참고하세요.
 
 `sherpa_ping`은 `src/developmentTools.ts`에 기존 동작을 보존하지만 정식 provider에서 노출하지 않습니다. 인자는 없습니다 (`{}`).
 

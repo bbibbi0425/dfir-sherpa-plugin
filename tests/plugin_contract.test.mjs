@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSearchFixture } from "./searchFixture.mjs";
@@ -23,10 +23,16 @@ test("bundled plugin exposes exactly four analysis tools using configured databa
     assert.ok(schematics);
     let reads = 0;
     let configuredPath = database;
+    let loggingEnabled = false;
     const tools = await provider({ getPluginConfig(value) {
       assert.equal(value, schematics);
       reads++;
-      return { get(key) { assert.equal(key, "databasePath"); return configuredPath; } };
+      return { get(key) {
+        if (key === "databasePath") return configuredPath;
+        if (key === "SHERPA_RUN_ID") return loggingEnabled ? "contract" : "";
+        if (key === "SHERPA_LOG_DIR") return loggingEnabled ? root : "";
+        assert.fail(`Unknown config key: ${key}`);
+      } };
     } });
     assert.deepEqual(tools.map(tool => tool.name), ["dataset_overview", "search_records", "get_record", "get_context"]);
     assert.equal(reads, 0);
@@ -54,6 +60,18 @@ test("bundled plugin exposes exactly four analysis tools using configured databa
     assert.throws(() => context.checkParameters({ line_id: "sample-020", before: 6 }));
     assert.throws(() => context.checkParameters({ line_id: "sample-020", after: -1 }));
     assert.equal((await context.implementation({ line_id: "sample-020" })).returned, 7);
+    // Compare enabled vs disabled retrieval; wall-clock elapsed_ms varies naturally.
+    const inputs = [{}, { query: "quartz" }, {line_id:"sample-020"}, {line_id:"sample-020"}];
+    const withoutLogs = [];
+    for (let i=0;i<tools.length;i++) withoutLogs.push(await tools[i].implementation(inputs[i]));
+    loggingEnabled = true;
+    for (let i=0;i<tools.length;i++) {
+      const logged = await tools[i].implementation(inputs[i]);
+      const {elapsed_ms:a,...before}=withoutLogs[i], {elapsed_ms:b,...after}=logged;
+      assert.deepEqual(after,before);
+    }
+    const lines=readFileSync(join(root,"contract_tools.jsonl"),"utf8").trimEnd().split("\n").map(JSON.parse);
+    assert.deepEqual(lines.map(l=>l.tool),tools.map(t=>t.name));
     configuredPath = "";
     assert.equal((await search.implementation({})).error, "DB_NOT_CONFIGURED");
     assert.equal((await tools[0].implementation({})).error, "DB_NOT_CONFIGURED");
