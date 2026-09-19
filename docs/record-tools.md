@@ -1,9 +1,7 @@
 # get_record / get_context
 
-두 Tool은 채팅별 `Canonical timeline DB` 설정을 사용합니다.
-현재 기준은 `outputs/B5.sqlite`의 `timeline`과 SQLite `rowid`입니다.
-DB 경로, SQL, 컬럼 이름은 모델 입력으로 받지 않습니다.
-`search_records` 구현과 기존 benchmark 결과는 변경하지 않았습니다.
+두 Tool은 채팅별 `Canonical timeline DB` 설정으로 지정한 SQLite DB의 `timeline` 테이블을 조회합니다.
+저장 순서는 SQLite `rowid` 기준이며, DB 경로·SQL·컬럼 이름은 모델 입력으로 받지 않습니다.
 
 ## 입력 스키마
 
@@ -122,63 +120,37 @@ context 응답 전체에도 **24,576 bytes** 상한이 있습니다.
 
 `readOnly: true`, `query_only=ON`, `trusted_schema=OFF`, `temp_store=MEMORY`로 연결합니다.
 모든 조회는 읽기 트랜잭션 안에서 수행하며 값은 바인딩합니다. DB 쓰기, 파일 속성 변경,
-schema/FTS 변경, create/edit/delete Tool은 없습니다. 이 문서의 구현 단계에서는 설치본을 갱신하지 않았습니다.
-후속 실제 설치·호출 검증은 [smoke test 안내](overview-smoke.md)를 참고하세요.
+schema/FTS 변경, create/edit/delete Tool은 없습니다.
 
-런타임 자체 로그는 stderr의 JSON 한 줄이며 다음 네 항목만 기록합니다.
+조회 모듈의 기본 stderr 로그는 다음 네 항목을 담습니다.
 
 ```typescript
 { tool: "get_record" | "get_context", line_id: string | null, returned: number, elapsed_ms: number }
 ```
 
-로그 파일을 만들지 않습니다. 원문·snippet·SQL·DB 경로·스택은 로그에 넣지 않습니다.
-잘못된 타입 또는 256자를 넘는 입력 ID는 로그에서 null로 표시합니다.
-elapsed_ms는 검증·연결·조회·출력 제한·연결 종료 시간을 포함하며 모델 추론과 로그 전송 시간은 제외합니다.
+기본 stderr 로그에서 잘못된 타입 또는 256자를 넘는 입력 ID는 null로 표시합니다.
+플러그인 provider에서는 별도로 JSONL 파일 기록을 활성화할 수 있습니다. 요청 ID, 반환 ID 목록,
+응답 크기와 잘림 여부 등 Tool별 메타정보를 기록하며 전체 레코드 본문은 저장하지 않습니다.
+설정과 오류 보고는 [JSONL 계측 안내](instrumentation.md)를 참고하세요.
 
-## 검증 재현
+`elapsed_ms`는 검증·연결·조회·출력 제한·연결 종료 시간을 포함하며 모델 추론과 로그 기록 시간은 제외합니다.
 
-프로젝트 루트에서 실행합니다. 출력 보고서는 새 경로여야 합니다.
+## 검증
+
+프로젝트 루트에서 실행합니다. 아래 DB 경로는 예시이며 보고서는 새 경로여야 합니다.
 
 ```powershell
 $nodeExe = "$env:USERPROFILE\.lmstudio\.internal\utils\node.exe"
+New-Item -ItemType Directory -Path .\outputs -Force | Out-Null
 & $nodeExe --test tests/record_tools.test.mjs
 & $nodeExe scripts/verify_record_tools.mjs --fixture --report outputs/record-tools-fixture.json
-& $nodeExe scripts/verify_record_tools.mjs --db outputs/B5.sqlite --report outputs/record-tools-B5.json
+& $nodeExe scripts/verify_record_tools.mjs --db 'C:\data\timeline.sqlite' --report outputs/record-tools.json
 ```
 
-번들 Tool 등록·호출 검증은 [search 문서](search.md)의 빌드 명령 후
-`node --test tests/plugin_contract.test.mjs`로 실행합니다.
+번들 Tool 등록·호출 검증은 [search 문서](search.md#테스트와-benchmark)의 빌드 및 계약 테스트 명령을 사용합니다.
 
-신규 단위 테스트 11개, 기존 search 테스트 10개, 번들 계약 테스트 1개를 통과했습니다.
-fixture/B5 기능 검증은 각각 14개 케이스 × 6회(총 84회)를 수행했습니다.
-ID는 첫·중간·마지막 저장 순서와 전체 필드 byte 크기로 선정하며, 정답이나 분석 키워드를 사용하지 않습니다.
-독립 SQL 조회와 필드 값·접두부·잘림 표시·출력 순서·건수를 비교했습니다.
-부재 ID, before/after 상한, 64-bit rowid 및 결번, 큰 제어문자/Unicode 필드도 검증했습니다.
-
-## B5 실측 (2026-09-19)
-
-캐시가 준비된 상태에서 직접 Tool 함수를 측정했습니다. 각 케이스 최초 1회와 추가 5회를
-기록했습니다. 아래 p95는 추가 5회의 nearest-rank 값(이 표본에서는 최댓값)입니다.
-장기 p95 또는 cold-disk 상한으로 해석하지 않습니다. 모델 호출은 하지 않았습니다.
-
-| Tool / 케이스 | p50(ms) | p95(ms) | 최대 output bytes |
-|---|---:|---:|---:|
-| get_record 첫 레코드 | 0.691 | 1.239 | 1,503 |
-| get_record 중간 레코드 | 0.642 | 2.020 | 1,380 |
-| get_record 마지막 레코드 | 0.576 | 0.661 | 1,510 |
-| get_record 원본 byte 크기 최대 레코드 | 2.370 | 2.644 | 7,244 |
-| get_context 첫 레코드 | 1.315 | 1.490 | 2,495 |
-| get_context 중간 레코드 | 1.742 | 2.042 | 4,427 |
-| get_context 마지막 레코드 | 1.701 | 2.248 | 2,484 |
-| get_context 큰 레코드 주변 11건 | 2.504 | 3.955 | 6,161 |
-| get_context 중간 주변 11건 | 3.042 | 3.168 | 6,809 |
-
-실측 최대치는 테스트한 케이스들의 최대값이며, B5의 모든 가능한 context를 전수 조회한 최대값은 아닙니다.
-DB는 487,654행 / 403,509,248 bytes이며 실행 전후 크기·수정 시각·SHA-256이 동일했습니다.
-SQLite journal/WAL/SHM 파일도 새로 생성되지 않았습니다.
-
-```text
-fbb57ebe05a709bca4800ad823b9524dc955d8521213b1d01d66b2396c080a42
-```
-
-상세 보고서: `outputs/record-tools-fixture.json`, `outputs/record-tools-B5.json`.
+검증 스크립트는 첫·중간·마지막 저장 순서와 필드 byte 크기를 기준으로 레코드를 선정합니다.
+독립 SQL 조회와 필드 값·접두부·잘림 표시·출력 순서·건수를 비교하며, 원본 DB의 hash·크기·수정 시각과 SQLite 부속 파일 상태를 확인합니다.
+단위 테스트에서는 부재 ID, before/after 상한, 64-bit rowid 및 결번, 큰 제어문자/Unicode 필드도 다룹니다.
+실측 크기는 검사한 케이스들의 관측값이며, 데이터셋의 모든 가능한 context에 대한 최대값을 의미하지 않습니다.
+데이터셋별 보고서는 Git에서 제외된 `outputs/`에 보관하세요.

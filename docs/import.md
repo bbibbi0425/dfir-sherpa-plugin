@@ -1,10 +1,8 @@
-# CSV → SQLite 빌드 (2단계)
+# CSV → SQLite 오프라인 빌드
 
-이 문서는 2단계의 별도 변환기를 설명합니다. **현재 연구 기준 DB는 팀원이 생성한
-`outputs/B5.sqlite` (`timeline`, SQLite `rowid`)**입니다.
-`B5_reference.sqlite`는 2단계 비교용 파생 파일이며 플러그인의 기준 DB가 아닙니다.
-아래 빌더를 canonical DB에 실행하지 않습니다. 현재 검색은 canonical DB를 수정하지
-않으며, [search_records 안내](search.md)에 구현·benchmark 결과를 정리했습니다.
+`scripts/build_timeline_db.py`는 normalized timeline CSV를 검증된 SQLite 파생 저장소로 변환하는 별도 스크립트입니다.
+생성하는 `records` 테이블은 플러그인이 조회하는 `timeline` 스키마와 다르므로, **출력 DB를 현재 retrieval Tool에 바로 연결할 수 없습니다.**
+플러그인용 DB 형식은 [README](../README.md#데이터베이스-형식)를 참고하세요. 이 빌더는 기존 canonical DB에 실행하지 않습니다.
 
 Python 3.10 이상과 표준 라이브러리만 사용합니다. LM Studio 실행이나 플러그인
 재설치는 필요하지 않습니다. 스크립트는 CSV를 읽기 전용으로 열며 기존 출력 파일을
@@ -19,14 +17,6 @@ python -m unittest discover -s tests -v
 New-Item -ItemType Directory -Path .\outputs -Force
 python .\scripts\build_timeline_db.py .\tests\fixtures\timeline.csv .\outputs\sample.sqlite
 python .\scripts\build_timeline_db.py 'C:\data\timeline.csv' .\outputs\timeline.sqlite
-```
-
-현재 작업 환경에서 확인한 Python 실행 경로는 다음과 같습니다.
-
-```powershell
-$pythonExe = "$env:USERPROFILE\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-& $pythonExe -m unittest discover -s tests -v
-& $pythonExe .\scripts\build_timeline_db.py 'C:\data\timeline.csv' .\outputs\timeline.sqlite
 ```
 
 입력 인코딩은 기본 `utf-8-sig`로, UTF-8 BOM 유무를 모두 처리합니다.
@@ -106,7 +96,5 @@ FTS5 여부, 생성 시각, 빌드/검증 소요시간, 검증 결과를 저장�
 SQLite URI의 `mode=ro`와 `PRAGMA query_only=ON`을 사용해야 합니다.
 빌더의 검증 연결은 이미 이 설정을 사용합니다.
 
-DB와 생성 보고서는 `outputs/`에 두고 Git에서 제외합니다.
-이 단계의 DB를 LM Studio에 연결하거나 모델에 반환하지 않습니다.
-위 설명은 2단계 빌더의 범위입니다. 이후 검색 구현은 별도 모듈에서 수행하며,
-이 빌더를 Tool에서 호출하지 않습니다.
+DB와 생성 보고서는 Git에서 제외된 `outputs/`에 보관하세요. 보고서와 DB 메타데이터에는 원본 경로와 데이터셋 식별 정보가 포함됩니다.
+빌더는 모델 Tool에 등록되어 있지 않으며 조회 중 호출되지 않습니다.

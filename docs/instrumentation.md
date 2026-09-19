@@ -1,9 +1,8 @@
 # Tool 호출 JSONL 계측
 
-retrieval 모듈 `searchRecords.mjs`, `recordTools.mjs`, `datasetOverview.mjs`는 변경하지 않는다.
-provider에서 결과를 받은 뒤 `toolLogging.mjs`가 메타정보 한 줄을 기록하고 같은 결과 객체를 반환한다.
-검색 알고리즘, sampling, Tool schema/반환 구조, output 상한은 그대로다.
-최종 assistant 분석 JSON 저장은 구현하지 않는다.
+provider는 조회 결과를 받은 뒤 `toolLogging.mjs`로 메타정보를 기록하고, 조회 결과 객체를 그대로 반환한다.
+계측은 검색 결과 선정과 Tool 반환 구조·output 상한에 영향을 주지 않는다.
+최종 assistant 응답의 자동 파일 저장은 제공하지 않는다.
 
 ## 설정
 
@@ -49,7 +48,7 @@ subject/detail/payload/snippet과 전체 응답 JSON은 로그에 저장하지 �
 오류는 stderr에 `sherpa_log_error` JSON으로, LM Studio에는 해당 Tool의 `warn`으로 알린다.
 실패한 로그를 성공으로 표시하지 않으며 Tool 반환값에 필드를 추가하거나 오류로 바꾸지 않는다.
 영구 저장을 강제하는 fsync는 하지 않는다. 중단으로 마지막 줄이 불완전하면 이를 자동 수리하지 않고 오류를 보고한다.
-기존 세 Tool의 최소 stderr 로그는 유지한다.
+조회 모듈의 기본 stderr 로그와 JSONL 파일 로그는 별도로 기록된다.
 
 ## 검증
 
@@ -61,52 +60,40 @@ subject/detail/payload/snippet과 전체 응답 JSON은 로그에 저장하지 �
 서로 다른 실행의 `elapsed_ms`는 자연스럽게 달라지므로 제외하고 비교하며,
 같은 결과 객체는 로깅 전후 `elapsed_ms`까지 포함해 byte-for-byte 동일한지 검사한다.
 
-## 검증 결과 (2026-09-19)
+단위 테스트는 호출당 한 줄, 기존 내용 보존 append, 독립 JSON 파싱, Unicode/개행 이스케이프,
+UTF-8 응답 크기와 메타정보 일치, 오류 응답 기록, 환경변수/설정 우선순위를 다룬다.
+쓰기 실패 및 경고 전달 실패 시 반환값 보존, 불완전한 로그와 DB hard link 보호도 확인한다.
+번들 계약 테스트 실행법은 [search 문서](search.md#테스트와-benchmark)에 있다.
 
-단위 테스트 30개와 플러그인 번들 연결 테스트 1개, 합계 **31개 통과**.
-JSONL 한 줄/호출, 기존 내용 보존 append, 각 줄 독립 JSON, Unicode/개행 이스케이프,
-실제 UTF-8 응답 크기와 메타정보 일치, 오류 응답 기록, 환경변수/설정 우선순위,
-쓰기 실패 및 경고 전달 실패 시 반환값 보존, 다른 파일/불완전한 로그/DB hard link 보호를 검증했다.
+## LM Studio에서 로그 확인
 
-LM Studio 0.4.24 설치본 갱신 후 전용 채팅에서 일반 문자열 `file`로 네 Tool을 각각 한 번 호출했다.
-기존 대화의 대기 중 호출은 승인하지 않았다. 전용 채팅의 설정:
+새 smoke 채팅에서 DB 경로와 두 로그 설정을 지정한다. 다음은 가상 예시다.
 
 ```text
-SHERPA_RUN_ID=smoke_20260919_jsonl_01
-SHERPA_LOG_DIR=C:\Users\subak\Desktop\AntiForensic\dfir_sherpa_plugins\outputs\tool-logs
+SHERPA_RUN_ID=smoke_example_01
+SHERPA_LOG_DIR=C:\experiment-logs
 ```
 
-실제 파일: `outputs/tool-logs/smoke_20260919_jsonl_01_tools.jsonl`, **4줄 / 1,049 bytes**.
+[smoke test 절차](overview-smoke.md)에 따라 호출 전에 DB snapshot을 만들고 네 Tool을 각각 한 번 호출한다.
+로그 파일 `C:\experiment-logs\smoke_example_01_tools.jsonl`에 네 줄이 추가되는지 확인한다.
+검증 스크립트는 네 줄을 기대하므로 이 확인에는 다른 호출이 없는 새 run ID를 사용한다.
 
-| Tool | 성공 | elapsed_ms | output_bytes | returned |
-|---|---|---:|---:|---:|
-| dataset_overview | true | 95.909 | 623 | 0 |
-| search_records | true | 2244.331 | 3400 | 8 |
-| get_record | true | 5.349 | 1503 | 1 |
-| get_context | true | 9.035 | 2495 | 4 |
-
-첫 번째 실제 JSONL 줄:
-
-```jsonl
-{"run_id":"smoke_20260919_jsonl_01","timestamp":"2026-09-19T08:55:17.470Z","tool":"dataset_overview","elapsed_ms":95.909,"returned":0,"output_bytes":623,"success":true,"total_records":487654}
-```
-
-`scripts/verify_lmstudio_smoke.mjs`의 `--jsonl`/`--run-id` 옵션으로 네 로그를 실제 LM Studio
-Tool 요청/응답 및 성공 이벤트와 대조했다. 허용 필드만 존재하며 실제 응답의 시간/크기/건수/ID 목록과 일치한다.
-`--compare-conversation`으로 계측 전 smoke 대화와 비교한 결과 **elapsed_ms 외 반환 JSON 전체가 동일**했다.
-본문을 비교에 사용하되 보고서에는 복사하지 않는다.
-
-실행한 검증 명령:
+아래 경로는 예시이며 DB, 해당 LM Studio 채팅 파일, 호출 전 snapshot, 로그 경로를 실제 값으로 바꿔 실행한다.
+JSONL smoke 검증에서는 run ID를 채팅별 플러그인 설정에 직접 지정한다.
 
 ```powershell
-& "$env:USERPROFILE\.lmstudio\.internal\utils\node.exe" scripts/verify_lmstudio_smoke.mjs --db outputs/B5.sqlite --conversation "$env:USERPROFILE/.lmstudio/conversations/1789807677590.conversation.json" --baseline outputs/instrumentation-smoke-baseline.json --report outputs/instrumentation-smoke-B5.json --jsonl outputs/tool-logs/smoke_20260919_jsonl_01_tools.jsonl --run-id smoke_20260919_jsonl_01 --compare-conversation "$env:USERPROFILE/.lmstudio/conversations/1789803555326.conversation.json"
+$nodeExe = "$env:USERPROFILE\.lmstudio\.internal\utils\node.exe"
+$dbPath = 'C:\data\timeline.sqlite'
+$smokeChat = Read-Host '검증할 LM Studio 채팅 JSON의 전체 경로'
+$runId = 'smoke_example_01'
+$toolLog = 'C:\experiment-logs\smoke_example_01_tools.jsonl'
+& $nodeExe scripts/verify_lmstudio_smoke.mjs --db $dbPath --conversation $smokeChat --baseline outputs/smoke-baseline.json --report outputs/smoke-instrumentation.json --jsonl $toolLog --run-id $runId
 ```
 
-보고서: `outputs/instrumentation-smoke-B5.json`, 기준 snapshot: `outputs/instrumentation-smoke-baseline.json`.
-DB SHA-256/크기/mtime 불변, journal/WAL/SHM 생성 없음:
+`--jsonl`과 `--run-id`는 함께 사용한다. 검증은 실제 LM Studio Tool 요청/응답 및 성공 이벤트와
+JSONL의 시간·크기·건수·ID 목록을 대조하고 DB 불변 여부를 확인한다.
+같은 DB·입력으로 실행한 비교용 채팅이 있으면 `--compare-conversation PATH`로 추가 대조할 수 있다.
+서로 다른 실행의 `elapsed_ms`는 비교에서 제외하며, 비교용 채팅도 네 Tool을 같은 순서로 호출해야 한다.
 
-```text
-fbb57ebe05a709bca4800ad823b9524dc955d8521213b1d01d66b2396c080a42
-```
-
-retrieval 모듈 3개는 수정 전후 SHA-256이 동일하다. 본실험과 최종 분석 JSON 저장은 수행하지 않았다.
+기존 보고서는 덮어쓰지 않는다. 로그와 채팅 파일에는 검색 조건과 식별자 등 연구 정보가 포함될 수 있으므로
+실제 파일과 검증 보고서는 공개 문서에 복사하지 않고 로컬에 보관한다. 프로젝트 안에서는 Git에서 제외된 `outputs/`를 사용할 수 있다.
