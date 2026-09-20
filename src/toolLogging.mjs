@@ -10,7 +10,7 @@ class LogError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
 
-function logEntry(tool, input, result, runId) {
+export function logEntry(tool, input, result, runId) {
   const entry = {
     run_id: runId, timestamp: new Date().toISOString(), tool,
     elapsed_ms: result.elapsed_ms, returned: result.returned ?? 0,

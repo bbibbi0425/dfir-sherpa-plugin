@@ -1,8 +1,10 @@
 # Tool 호출 JSONL 계측
 
 provider는 조회 결과를 받은 뒤 `toolLogging.mjs`로 메타정보를 기록하고, 조회 결과 객체를 그대로 반환한다.
+
+이 문서는 기존 설정 기반 JSONL 기록을 설명한다. 일반 실험에서는 [더블클릭 launcher](desktop-launcher.md)로 summary와 원본 Tool 이벤트를 자동 수집한다. 자동 summary는 Collector가 저장된 대화에서 재구성하며 관측 시각과 출처를 명시한다. 이때 플러그인의 직접 JSONL 기록은 중복 방지를 위해 사용하지 않는다. 각 conversation을 독립된 Run으로 관리하며 조회 반환값은 바꾸지 않는다.
 계측은 검색 결과 선정과 Tool 반환 구조·output 상한에 영향을 주지 않는다.
-최종 assistant 응답의 자동 파일 저장은 제공하지 않는다.
+provider는 최종 assistant 응답을 저장하지 않는다. 별도 운영자용 [실행별 결과 수집기](run-results.md)가 LM Studio 대화 파일에서 최종 응답과 전체 대화를 보관한다. `collect --watch`를 실행하면 종료 후 자동 수집할 수 있다.
 
 ## 설정
 

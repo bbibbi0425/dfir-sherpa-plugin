@@ -5,13 +5,37 @@ import { searchRecords } from "./searchRecords.mjs";
 import { getRecord, getContext } from "./recordTools.mjs";
 import { datasetOverview } from "./datasetOverview.mjs";
 import { writeToolLog } from "./toolLogging.mjs";
+import { makeRunId, RUN_STATUS_PREFIX, validRunId } from "./runIdentity.mjs";
+import { activeExperiment } from "./experimentBridge.mjs";
+import { createDatabaseBinding, DB_STATUS_PREFIX } from "./databaseBinding.mjs";
+import { performance } from "node:perf_hooks";
 
 export async function toolsProvider(ctl: ToolsProviderController) {
-  function executeLogged(name: string, args: any, retrieve: (path: string, input: any) => any, ctx?: { warn: (message: string) => void }) {
+  let automaticRunId: string | undefined;
+  const bindDatabase = createDatabaseBinding();
+  function executeLogged(name: string, args: any, retrieve: (path: string, input: any) => any, ctx?: { warn: (message: string) => void; status?: (message: string) => void }) {
     const config = ctl.getPluginConfig(configSchematics);
+    const started = performance.now();
     const databasePath = config.get("databasePath");
-    const result = retrieve(databasePath, args);
-    writeToolLog(name, args, result, () => ({ databasePath,
+    const binding = bindDatabase(databasePath);
+    let experiment: any;
+    try { experiment = activeExperiment(databasePath); }
+    catch (error) {
+      try { ctx?.warn(`[EXPERIMENT_LOG_ERROR] ${String(error)}`); } catch { /* Retrieval remains available. */ }
+    }
+    // Out-of-band status is persisted by LM Studio, never added to the model's Tool output.
+    // Collector binds the first marker to the conversation, not to a global current-run variable.
+    try {
+      const requestedRunId = experiment?.run_id || config.get("SHERPA_RUN_ID") || process.env.SHERPA_RUN_ID;
+      automaticRunId ??= makeRunId(databasePath);
+      ctx?.status?.(RUN_STATUS_PREFIX + (validRunId(requestedRunId) ? requestedRunId : automaticRunId) +
+        "\n" + DB_STATUS_PREFIX + JSON.stringify(binding));
+    } catch { /* Instrumentation cannot change retrieval behavior. */ }
+    if (binding.error) { try { ctx?.warn(`[${binding.error}] ${binding.message}`); } catch {} }
+    const result = binding.error ? {ok:false,error:binding.error,message:binding.message,
+      elapsed_ms:Math.round((performance.now()-started)*1000)/1000} : retrieve(databasePath, args);
+    // Experiment collector is the sole summary writer, keyed by conversation/call ID.
+    if (!experiment) writeToolLog(name, args, result, () => ({ databasePath,
       runId: config.get("SHERPA_RUN_ID"), logDir: config.get("SHERPA_LOG_DIR"),
     }), message => ctx?.warn(message));
     return result;

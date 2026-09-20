@@ -3,7 +3,7 @@ import { createConfigSchematics } from "@lmstudio/sdk";
 export const configSchematics = createConfigSchematics()
   .field("databasePath", "string", {
     displayName: "Canonical timeline DB",
-    subtitle: "Absolute path to the canonical SQLite DB with a timeline table. Opened read-only.",
+    subtitle: "Required: absolute path to the SQLite timeline for this chat. Opened read-only. Use a new chat to change databases.",
   }, "")
   .field("SHERPA_RUN_ID", "string", {
     displayName: "SHERPA_RUN_ID",

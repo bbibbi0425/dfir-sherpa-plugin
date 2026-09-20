@@ -10,6 +10,17 @@
     "test:records": "node --test tests/record_tools.test.mjs",
     "test:overview": "node --test tests/dataset_overview.test.mjs",
     "test:logging": "node --test tests/tool_logging.test.mjs",
+    "test:results": "node --test tests/run_results.test.mjs",
+    "run:results": "node scripts/run_results.mjs",
+    "collector": "node scripts/collector.mjs",
+    "collector:daemon": "node scripts/collector_daemon.mjs",
+    "collector:stop": "node scripts/collector.mjs --stop",
+    "experiment:start": "node scripts/experiment.mjs start",
+    "experiment:stop": "node scripts/experiment.mjs stop",
+    "test:experiment": "node --test tests/experiment.test.mjs",
+    "test:launcher": "node --test tests/desktop_launcher.test.mjs",
+    "test:collector": "node --test tests/collector.test.mjs",
+    "test:setup": "node --test tests/setup.test.mjs",
     "benchmark:search": "node scripts/benchmark_search.mjs"
   },
   "dependencies": {
