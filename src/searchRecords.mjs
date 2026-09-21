@@ -1,5 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
-import { isAbsolute } from "node:path";
+import { openTimelineDatabase, TimelineSchemaError } from "./timelineSchema.mjs";
 import { performance } from "node:perf_hooks";
 
 export const DEFAULT_LIMIT = 8;
@@ -7,7 +6,6 @@ export const MAX_LIMIT = 10;
 export const SNIPPET_CHARS = 300;
 export const MAX_RESPONSE_BYTES = 24576;
 
-const COLUMNS = ["line_id", "timestamp", "source", "event_type", "subject", "detail", "payload", "source_file", "raw_ref"];
 const ALLOWED_ARGS = new Set(["query", "source", "event_type", "timestamp_from", "timestamp_to", "limit"]);
 
 class SearchError extends Error {
@@ -53,20 +51,6 @@ export function coverageRanks(count, limit) {
 function clip(text, maximum) {
   const chars = Array.from(text);
   return chars.length <= maximum ? text : chars.slice(0, maximum - 1).join("") + "…";
-}
-
-function checkSchema(db) {
-  const table = db.prepare("SELECT type, sql FROM sqlite_schema WHERE name = 'timeline'").get();
-  if (!table || table.type !== "table" || /CREATE\s+VIRTUAL\s+TABLE/i.test(table.sql)) {
-    throw new SearchError("INVALID_SCHEMA", "Expected a regular timeline table.");
-  }
-  const info = db.prepare("PRAGMA table_info(timeline)").all();
-  if (info.some(c => ["rowid", "_rowid_", "oid"].includes(c.name.toLowerCase())) ||
-      !COLUMNS.every(name => info.some(c => c.name === name && c.type.toUpperCase() === "TEXT")) ||
-      !info.some(c => c.name === "line_id" && c.pk === 1)) {
-    throw new SearchError("INVALID_SCHEMA", "Expected normalized TEXT columns, line_id primary key and SQLite rowid.");
-  }
-  db.prepare("SELECT rowid FROM timeline LIMIT 0").all();
 }
 
 function conditions(args) {
@@ -163,18 +147,14 @@ export function searchRecords(dbPath, input = {}) {
   let response;
   try {
     const args = validate(input);
-    if (typeof dbPath !== "string" || !isAbsolute(dbPath) || dbPath.includes("\0")) {
-      throw new SearchError("DB_NOT_CONFIGURED", "Set an absolute canonical timeline DB path in plugin settings.");
-    }
-    db = new DatabaseSync(dbPath, { readOnly: true, allowExtension: false, timeout: 1000 });
-    db.exec("PRAGMA query_only=ON; PRAGMA temp_store=MEMORY; PRAGMA trusted_schema=OFF; BEGIN;");
-    checkSchema(db);
+    db = openTimelineDatabase(dbPath);
     response = runSearch(db, args);
   } catch (error) {
+    const known = error instanceof SearchError || error instanceof TimelineSchemaError;
     response = {
       ok: false,
-      error: error instanceof SearchError ? error.code : "DB_READ_FAILED",
-      message: error instanceof SearchError ? error.message : "Unable to read the configured canonical timeline database.",
+      error: known ? error.code : "DB_READ_FAILED",
+      message: known ? error.message : "Unable to read the configured canonical timeline database.",
     };
   } finally {
     if (db) db.close();

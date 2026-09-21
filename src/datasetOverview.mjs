@@ -1,8 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
-import { basename, isAbsolute } from "node:path";
+import { basename } from "node:path";
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { RECORD_FIELDS } from "./recordTools.mjs";
+import { openTimelineDatabase, TimelineSchemaError, TIMELINE_FIELDS } from "./timelineSchema.mjs";
 
 export const OVERVIEW_MAX_BYTES = 2048;
 const SUPPORTED_TOOLS = {
@@ -24,20 +23,7 @@ export function datasetOverview(path, input = {}, logger = entry => console.erro
     if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length) {
       throw new OverviewError("INVALID_ARGUMENT", "dataset_overview accepts no arguments.");
     }
-    if (typeof path !== "string" || !isAbsolute(path) || path.includes("\0")) {
-      throw new OverviewError("DB_NOT_CONFIGURED", "Set an absolute canonical timeline DB path in plugin settings.");
-    }
-    db = new DatabaseSync(path, { readOnly: true, allowExtension: false, timeout: 1000 });
-    db.exec("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA temp_store=MEMORY; BEGIN;");
-    const table = db.prepare("SELECT type,sql FROM sqlite_schema WHERE name='timeline'").get();
-    const columns = db.prepare("PRAGMA table_info(timeline)").all();
-    if (!table || table.type !== "table" || /CREATE\s+VIRTUAL\s+TABLE/i.test(table.sql) ||
-        !RECORD_FIELDS.every(name => columns.some(c => c.name === name && c.type.toUpperCase() === "TEXT")) ||
-        !columns.some(c => c.name === "line_id" && c.pk === 1) || columns.filter(c => c.pk > 0).length !== 1 ||
-        columns.some(c => ["rowid", "_rowid_", "oid"].includes(c.name.toLowerCase()))) {
-      throw new OverviewError("INVALID_SCHEMA", "Expected canonical timeline TEXT columns, line_id primary key and SQLite rowid.");
-    }
-    db.prepare("SELECT rowid FROM timeline LIMIT 0").all();
+    db = openTimelineDatabase(path);
     // Separate indexed extrema; never select record bodies or example rows.
     const bounds = db.prepare(`SELECT
       (SELECT min(timestamp) FROM timeline WHERE timestamp <> '') AS first_timestamp,
@@ -54,14 +40,15 @@ export function datasetOverview(path, input = {}, logger = entry => console.erro
     result = {
       ok: true, dataset: identifier,
       total_records: db.prepare("SELECT count(*) AS n FROM timeline").get().n,
-      available_fields: [...RECORD_FIELDS],
+      available_fields: [...TIMELINE_FIELDS],
       ...bounds, timestamp_order: "text_min_max_nonempty",
       distinct_source_count: db.prepare("SELECT count(DISTINCT source) AS n FROM timeline").get().n,
       supported_tools: { ...SUPPORTED_TOOLS },
     };
   } catch (error) {
-    result = { ok: false, error: error instanceof OverviewError ? error.code : "DB_READ_FAILED",
-      message: error instanceof OverviewError ? error.message : "Unable to read the configured canonical timeline database." };
+    const known = error instanceof OverviewError || error instanceof TimelineSchemaError;
+    result = { ok: false, error: known ? error.code : "DB_READ_FAILED",
+      message: known ? error.message : "Unable to read the configured canonical timeline database." };
   } finally { if (db) db.close(); }
   result.elapsed_ms = Math.round((performance.now() - started) * 1000) / 1000;
   if (Buffer.byteLength(JSON.stringify(result)) > OVERVIEW_MAX_BYTES) {

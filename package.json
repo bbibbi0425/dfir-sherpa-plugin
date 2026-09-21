@@ -9,6 +9,7 @@
     "test:search": "node --test tests/search_records.test.mjs",
     "test:records": "node --test tests/record_tools.test.mjs",
     "test:overview": "node --test tests/dataset_overview.test.mjs",
+    "test:schema": "node --test tests/timeline_schema.test.mjs",
     "test:logging": "node --test tests/tool_logging.test.mjs",
     "test:results": "node --test tests/run_results.test.mjs",
     "run:results": "node scripts/run_results.mjs",

@@ -74,6 +74,8 @@ line_id, timestamp, source, event_type, subject, detail, payload, source_file, r
 
 `line_id`는 단일 컬럼 기본 키여야 하고 SQLite `rowid`를 사용할 수 있어야 합니다. `timestamp`, `source`, `event_type` 인덱스는 필터 조회에 활용할 수 있습니다.
 
+네 Tool은 동일한 스키마 검증을 사용합니다. `PRIMARY KEY(line_id, timestamp)` 같은 복합 기본 키는 모두 `INVALID_SCHEMA`로 거절합니다.
+
 자유 텍스트 검색은 `subject`, `detail`, `payload`에 대한 리터럴 부분 문자열 검색입니다. FTS는 사용하지 않으며, 검색 성능은 데이터 크기와 조건에 따라 달라집니다. timestamp는 저장된 문자열을 기준으로 비교하고 날짜 형식이나 시간대를 변환하지 않습니다.
 
 ## 읽기 전용 조회와 호출 로그

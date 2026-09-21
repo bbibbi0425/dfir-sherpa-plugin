@@ -1,8 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
-import { isAbsolute } from "node:path";
+import { openTimelineDatabase, TimelineSchemaError, TIMELINE_FIELDS } from "./timelineSchema.mjs";
 import { performance } from "node:perf_hooks";
 
-export const RECORD_FIELDS = ["line_id", "timestamp", "source", "event_type", "subject", "detail", "payload", "source_file", "raw_ref"];
+export const RECORD_FIELDS = TIMELINE_FIELDS;
 export const MAX_OUTPUT_BYTES = 24576;
 export const CONTEXT_SNIPPET_CHARS = 180;
 // Each budget includes the JSON string's quotes and escaping, not just UTF-8 text.
@@ -38,27 +37,6 @@ function validate(input, context) {
     }
   }
   return result;
-}
-
-function openDatabase(path) {
-  if (typeof path !== "string" || !isAbsolute(path) || path.includes("\0")) {
-    throw new RecordError("DB_NOT_CONFIGURED", "Set an absolute canonical timeline DB path in plugin settings.");
-  }
-  const db = new DatabaseSync(path, { readOnly: true, allowExtension: false, timeout: 1000 });
-  try {
-    db.exec("PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; PRAGMA temp_store=MEMORY; BEGIN;");
-    const table = db.prepare("SELECT type,sql FROM sqlite_schema WHERE name='timeline'").get();
-    const columns = db.prepare("PRAGMA table_info(timeline)").all();
-    if (!table || table.type !== "table" || /CREATE\s+VIRTUAL\s+TABLE/i.test(table.sql) ||
-        !RECORD_FIELDS.every(name => columns.some(c => c.name === name && c.type.toUpperCase() === "TEXT")) ||
-        !columns.some(c => c.name === "line_id" && c.pk === 1) ||
-        columns.filter(c => c.pk > 0).length !== 1 ||
-        columns.some(c => ["rowid", "_rowid_", "oid"].includes(c.name.toLowerCase()))) {
-      throw new RecordError("INVALID_SCHEMA", "Expected canonical timeline TEXT columns, line_id primary key and SQLite rowid.");
-    }
-    db.prepare("SELECT rowid FROM timeline LIMIT 0").all();
-    return db;
-  } catch (error) { db.close(); throw error; }
 }
 
 function projection(budgets) {
@@ -171,11 +149,12 @@ function execute(tool, path, input, context, logger) {
   let response;
   try {
     const args = validate(input, context);
-    db = openDatabase(path);
+    db = openTimelineDatabase(path);
     response = context ? lookupContext(db, args) : lookupRecord(db, args);
   } catch (error) {
-    response = { ok: false, returned: 0, error: error instanceof RecordError ? error.code : "DB_READ_FAILED",
-      message: error instanceof RecordError ? error.message : "Unable to read the configured canonical timeline database." };
+    const known = error instanceof RecordError || error instanceof TimelineSchemaError;
+    response = { ok: false, returned: 0, error: known ? error.code : "DB_READ_FAILED",
+      message: known ? error.message : "Unable to read the configured canonical timeline database." };
     if (response.error === "NOT_FOUND") response.found = false;
   } finally { if (db) db.close(); }
   response.elapsed_ms = Math.round((performance.now() - started) * 1000) / 1000;
