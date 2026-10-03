@@ -1,19 +1,39 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
+import { createRequire, registerHooks } from "node:module";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { createSearchFixture } from "./searchFixture.mjs";
 
-// Build src/index.ts into this bundle before this contract test; no LM Studio writes.
-const { main } = createRequire(import.meta.url)("../outputs/plugin-check.cjs");
+// Test current source, not an old ignored bundle. Node's TypeScript support strips
+// types; these hooks resolve the plugin's extensionless imports and dependencies.
+const installedRequire = createRequire(join(homedir(), ".lmstudio", "extensions", "plugins", "local", "dfir-sherpa", "package.json"));
+const sourceRoot = new URL("../src/", import.meta.url).href;
 
-test("bundled plugin exposes exactly four analysis tools using configured database", async () => {
+test("plugin exposes exactly four analysis tools using configured database", async () => {
   const root = mkdtempSync(join(tmpdir(), "sherpa-plugin-contract-"));
-  const originalConfig = process.env.SHERPA_CONFIG_PATH;
+  const environmentKeys = ["SHERPA_CONFIG_PATH", "USERPROFILE", "HOME", "SHERPA_RUN_ID", "SHERPA_LOG_DIR"];
+  const originalEnvironment = Object.fromEntries(environmentKeys.map(key => [key, process.env[key]]));
   process.env.SHERPA_CONFIG_PATH = join(root,"local-config.json");
+  // A running user Collector must never redirect fixture logs or affect this test.
+  process.env.USERPROFILE = root;
+  process.env.HOME = root;
+  delete process.env.SHERPA_RUN_ID;
+  delete process.env.SHERPA_LOG_DIR;
+  const hooks = registerHooks({ resolve(specifier, context, nextResolve) {
+    if (!context.parentURL?.startsWith(sourceRoot)) return nextResolve(specifier, context);
+    if (specifier === "./config" || specifier === "./toolsProvider") return nextResolve(`${specifier}.ts`, context);
+    try { return nextResolve(specifier, context); }
+    catch (error) {
+      if (error.code !== "ERR_MODULE_NOT_FOUND" || !["@lmstudio/sdk", "zod"].includes(specifier)) throw error;
+      return nextResolve(pathToFileURL(installedRequire.resolve(specifier)).href, context);
+    }
+  } });
   try {
+    assert.equal(homedir(), root);
+    const { main } = await import("../src/index.ts");
     const database = join(root, "fixture.sqlite");
     createSearchFixture(database);
     let provider;
@@ -97,7 +117,10 @@ test("bundled plugin exposes exactly four analysis tools using configured databa
     configuredPath=database;
     assert.equal((await fresh[0].implementation({})).error,"DB_PATH_CHANGED");
   } finally {
-    if(originalConfig===undefined)delete process.env.SHERPA_CONFIG_PATH;else process.env.SHERPA_CONFIG_PATH=originalConfig;
+    hooks.deregister();
+    for (const [key, value] of Object.entries(originalEnvironment)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
     rmSync(root, { recursive: true });
   }
 });
