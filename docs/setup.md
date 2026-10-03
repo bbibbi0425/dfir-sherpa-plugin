@@ -18,6 +18,18 @@ Windows/LM Studio 0.4.24 기준입니다. `%USERPROFILE%\.lmstudio` 아래 번�
 
 모델·플러그인 선택 및 LM Studio 자체 Tool 승인 정책은 사용자가 관리합니다. setup은 채팅이나 승인 정책을 바꾸지 않습니다. Collector와 model stream은 launcher가 관리하고 여러 새 채팅을 연속 수집합니다. 로그인 자동 시작은 등록하지 않습니다.
 
+## 여러 DB를 자동으로 순차 실행
+
+위의 최초 설치를 마친 팀원은 프로젝트에 포함된 `DFIR-Sherpa-Batch.cmd`를 사용합니다. 바탕화면의 기존 **DFIR Sherpa Experiment**는 수동으로 새 채팅을 만드는 실험용이며, 배치 실행은 별도 파일로 시작합니다.
+
+1. LM Studio에서 모델 하나와 `local/dfir-sherpa`만 활성화하고 Integrations 설정을 펼칩니다. 네 Tool의 승인 정책은 사용자가 허용으로 설정합니다.
+2. `DFIR-Sherpa-Batch.cmd`를 더블클릭하고 **Choose folder**로 DB 폴더를 선택합니다. 실행할 파일만 체크하고 **Up/Down**으로 순서를 정한 뒤 공통 Prompt를 입력합니다. 다른 폴더의 파일은 **Add SQLite files**로 추가할 수 있습니다.
+3. **Start batch**를 누릅니다. 체크한 DB를 위에서 아래 순서로 실행합니다. 각 DB마다 새 채팅을 만들고 `Canonical timeline DB`를 설정한 뒤 동일 Prompt를 실행합니다. 이전 Run의 완료와 결과 저장을 확인해야 다음 DB로 넘어갑니다.
+
+PowerShell 입력이나 코드의 경로 수정은 필요하지 않습니다. 설치된 사용자별 launcher 설정과 선택한 파일의 절대경로를 사용합니다. DB 목록·Prompt·배치 상태는 각자의 `outputs/batches/`, 분석 결과는 `outputs/results/`에 저장되며 모두 Git에서 제외됩니다. 공통 Prompt는 저장소에 포함하지 않으므로 팀원이 직접 입력해야 합니다. 개인용 `outputs/batch-prompt.txt`가 있으면 입력창의 초기값으로 불러옵니다.
+
+Windows .NET Framework 4의 C# 컴파일러와 UI Automation이 필요하며 첫 실행 때 보조 실행 파일을 로컬에서 빌드합니다. LM Studio 0.4.25 영어 UI에서 두 DB를 대상으로 새 채팅·동일 Prompt·개요 Tool 호출·자동 결과 저장까지 연속 실행을 확인했습니다. [순차 실험 안내](batch.md)의 실행 조건과 동일 Prompt의 model input 로그 연결 제약을 확인하세요.
+
 ## 사용자 설정과 경로
 
 | 항목 | 위치 |

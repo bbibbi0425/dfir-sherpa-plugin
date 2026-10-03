@@ -107,6 +107,16 @@ Launcher가 Collector와 model log stream을 준비하고 LM Studio를 실행합
 
 사용법과 저장 파일은 [더블클릭 실험 안내](docs/desktop-launcher.md)를 참고하세요. 기존 `experiment:start / experiment:stop`과 `init / collect --watch`는 개발·수동 복구용으로 유지합니다.
 
+## 여러 DB 순차 실험
+
+팀원도 자신의 PC에서 `setup.cmd`로 설치한 뒤 **DFIR-Sherpa-Batch.cmd**를 사용할 수 있습니다. 개인 경로나 특정 DB 목록은 코드에 포함하지 않습니다.
+
+1. LM Studio에서 실험 모델 하나와 `local/dfir-sherpa`만 활성화하고 Integrations 설정을 펼칩니다. 무인 실행을 위해 네 Tool의 승인 정책을 사용자가 허용으로 설정합니다.
+2. **DFIR-Sherpa-Batch.cmd**를 더블클릭합니다. **Choose folder**로 DB 폴더를 선택하고 실행할 파일만 체크한 뒤 **Up/Down**으로 순서를 정합니다. 모든 채팅에 사용할 공통 Prompt를 입력합니다. 다른 폴더의 파일은 **Add SQLite files**로 추가할 수 있습니다.
+3. **Start batch**를 누릅니다. 체크한 DB를 위에서 아래 순서로 실행하며, DB 하나당 새 채팅 생성 → 해당 DB 설정 → 동일 Prompt 실행 → 결과 저장 확인을 반복합니다. 결과는 각자의 프로젝트 `outputs/results/<run_id>/`에 저장됩니다.
+
+배치 실행기는 LM Studio 0.4.25 영어 UI를 기준으로 작성했습니다. 실제 모델로 두 SQLite DB를 순서대로 실행해 별도 채팅 생성, 동일 Prompt 전송, `dataset_overview` 호출, 최종 JSON·결과 저장과 DB 해시 불변을 확인했습니다. 이 검증은 메타정보만 조회하는 smoke test이며, UI 버전·언어가 다르면 중단될 수 있습니다. 동일 Prompt의 model input 로그 연결에는 제약이 있으므로 [순차 실험 안내](docs/batch.md)를 참고하세요.
+
 ## 개발 및 문서
 
 ```text
