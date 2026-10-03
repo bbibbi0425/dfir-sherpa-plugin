@@ -22,6 +22,9 @@
     "test:launcher": "node --test tests/desktop_launcher.test.mjs",
     "test:collector": "node --test tests/collector.test.mjs",
     "test:setup": "node --test tests/setup.test.mjs",
+    "batch": "node scripts/batch.mjs --wizard",
+    "batch:stop": "node scripts/batch.mjs --stop",
+    "test:batch": "node --test tests/batch.test.mjs",
     "benchmark:search": "node scripts/benchmark_search.mjs"
   },
   "dependencies": {
